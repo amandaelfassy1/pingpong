@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Pong Multijoueur</title>
+  <link href="style.css" rel="stylesheet"/>
+</head>
+<body>
+  <div id="gameControls" style="text-align: center; margin-bottom: 20px;">
+    <button id="joinGameBtn">Rejoindre la partie</button>
+    <h1>PONG GAME</h1>
+  </div>
+  <div id="restartDiv" style="text-align: center; display: none;">
+    <button id="restartBtn">Rejouer</button>
+  </div>
+  <canvas id="pongCanvas" width="800" height="400" style=" display: none; margin: 150px auto"></canvas>
+
+  <script>
+    const canvas = document.getElementById('pongCanvas');
+    const context = canvas.getContext('2d');
+    const socket = new WebSocket('ws://localhost:3000');
+    socket.addEventListener('message', (event) => {
+  const receivedData = JSON.parse(event.data);
+  if (receivedData.type === 'existingPlayer') {
+    // Gérer l'arrivée d'un autre joueur déjà connecté
+    // Peut-être stocker leur ID et initialiser les valeurs appropriées
+  } else if (receivedData.type === 'paddle') {
+    // Mettre à jour la position de la raquette du joueur 2
+    paddle2Y = receivedData.y;
+  }
+  // Ajouter d'autres conditions au besoin
+});
+    const paddleWidth = 10;
+    const paddleHeight = 100;
+    let paddle1Y = canvas.height / 2 - paddleHeight / 2;
+    let paddle2Y = canvas.height / 2 - paddleHeight / 2;
+    const paddleSpeed = 5;
+
+    const ballSize = 10;
+    let ballX = canvas.width / 2;
+    let ballY = canvas.height / 2;
+    let ballSpeedX = 5;
+    let ballSpeedY = 5;
+
+    let scorePlayer1 = 0;
+    let scorePlayer2 = 0;
+    const maxScore = 3;
+
+    let gameActive = false;
+
+    function drawPaddle(x, y) {
+      context.fillStyle = '#fff';
+      context.fillRect(x, y, paddleWidth, paddleHeight);
+    }
+
+    function drawBall(x, y) {
+      context.beginPath();
+      context.arc(x, y, ballSize, 0, Math.PI * 2);
+      context.fillStyle = '#fff';
+      context.fill();
+      context.closePath();
+    }
+
+    function movePaddle(event) {
+      let mouseY = event.clientY - canvas.offsetTop;
+      if (mouseY > 0 && mouseY < canvas.height - paddleHeight) {
+        paddle1Y = mouseY;
+        socket.send(JSON.stringify({ type: 'paddle', y: paddle1Y }));
+      }
+    }
+
+    function updateGame() {
+      context.clearRect(0, 0, canvas.width, canvas.height);
+
+      drawPaddle(paddleWidth, paddle1Y);
+      drawPaddle(canvas.width - paddleWidth * 2, paddle2Y);
+      drawBall(ballX, ballY);
+
+      if (!gameActive) return;
+
+      ballX += ballSpeedX;
+      ballY += ballSpeedY;
+
+      if (ballY + ballSize > canvas.height || ballY - ballSize < 0) {
+        ballSpeedY = -ballSpeedY;
+      }
+
+      if (
+        ballX - ballSize < paddleWidth * 2 &&
+        ballY > paddle1Y &&
+        ballY < paddle1Y + paddleHeight
+      ) {
+        ballSpeedX = -ballSpeedX;
+      }
+
+      if (
+        ballX + ballSize > canvas.width - paddleWidth * 2 &&
+        ballY > paddle2Y &&
+        ballY < paddle2Y + paddleHeight
+      ) {
+        ballSpeedX = -ballSpeedX;
+      }
+
+      if (ballX - ballSize < 0) {
+        scorePlayer2++;
+        checkGameOver();
+        resetBall();
+      } else if (ballX + ballSize > canvas.width) {
+        scorePlayer1++;
+        checkGameOver();
+        resetBall();
+      }
+
+      context.fillText(`Joueur 1: ${scorePlayer1}`, 100, 50);
+      context.fillText(`Joueur 2: ${scorePlayer2}`, canvas.width - 150, 50);
+
+      requestAnimationFrame(updateGame);
+    }
+
+    function resetBall() {
+      ballX = canvas.width / 2;
+      ballY = canvas.height / 2;
+      ballSpeedX = -ballSpeedX;
+    }
+
+    function checkGameOver() {
+      if (scorePlayer1 === maxScore || scorePlayer2 === maxScore) {
+        endGame();
+      }
+    }
+
+    function endGame() {
+      gameActive = false;
+      context.clearRect(0, 0, canvas.width, canvas.height);
+      context.font = '24px Arial';
+      context.fillText(
+        scorePlayer1 === maxScore ? 'Joueur 1 gagne!' : 'Joueur 2 gagne!',
+        canvas.width / 2 - 100,
+        canvas.height / 2
+      );
+      document.getElementById('restartDiv').style.display = 'block';
+    }
+
+    function resetGame() {
+      scorePlayer1 = 0;
+      scorePlayer2 = 0;
+      document.getElementById('restartDiv').style.display = 'none';
+      gameActive = true;
+      updateGame();
+    }
+
+    canvas.addEventListener('mousemove', movePaddle);
+
+    socket.addEventListener('message', (event) => {
+      const receivedData = JSON.parse(event.data);
+      if (receivedData.type === 'paddle') {
+        paddle2Y = receivedData.y;
+      }
+    });
+
+    document.getElementById('joinGameBtn').addEventListener('click', () => {
+      document.getElementById('gameControls').style.display = 'none';
+      canvas.style.display = 'block';
+      socket.send(JSON.stringify({ type: 'newPlayer' }));
+      gameActive = true;
+      updateGame();
+    });
+
+    document.getElementById('restartBtn').addEventListener('click', () => {
+      resetGame();
+    });
+
+  </script>
+</body>
+</html>
