@@ -12,32 +12,23 @@
   <div id="restartDiv" style="text-align: center; display: none;">
     <button id="restartBtn">Rejouer</button>
   </div>
-  <canvas id="pongCanvas" width="800" height="400" style=" display: none; margin: 150px auto"></canvas>
+  <canvas id="pongCanvas" width="800" height="400" style="display: none; margin: 150px auto;"></canvas>
 
+  <script src="https://cdn.socket.io/4.3.2/socket.io.js"></script>
   <script>
     const canvas = document.getElementById('pongCanvas');
     const context = canvas.getContext('2d');
-    const socket = new WebSocket('ws://localhost:3000');
-    socket.addEventListener('message', (event) => {
-  const receivedData = JSON.parse(event.data);
-  if (receivedData.type === 'existingPlayer') {
-    // Gérer l'arrivée d'un autre joueur déjà connecté
-    // Peut-être stocker leur ID et initialiser les valeurs appropriées
-  } else if (receivedData.type === 'paddle') {
-    // Mettre à jour la position de la raquette du joueur 2
-    paddle2Y = receivedData.y;
-  }
-  // Ajouter d'autres conditions au besoin
-});
+    const socket = io('http://localhost:3000');
+
+    let paddle1Y = canvas.height / 2 - 50; // Modifier la hauteur initiale des raquettes si nécessaire
+    let paddle2Y = canvas.height / 2 - 50;
     const paddleWidth = 10;
     const paddleHeight = 100;
-    let paddle1Y = canvas.height / 2 - paddleHeight / 2;
-    let paddle2Y = canvas.height / 2 - paddleHeight / 2;
     const paddleSpeed = 5;
 
-    const ballSize = 10;
     let ballX = canvas.width / 2;
     let ballY = canvas.height / 2;
+    const ballSize = 10;
     let ballSpeedX = 5;
     let ballSpeedY = 5;
 
@@ -63,8 +54,8 @@
     function movePaddle(event) {
       let mouseY = event.clientY - canvas.offsetTop;
       if (mouseY > 0 && mouseY < canvas.height - paddleHeight) {
-        paddle1Y = mouseY;
-        socket.send(JSON.stringify({ type: 'paddle', y: paddle1Y }));
+        paddle1Y = mouseY - paddleHeight / 2;
+        socket.emit('paddle', { type: 'paddle', y: paddle1Y });
       }
     }
 
@@ -84,19 +75,11 @@
         ballSpeedY = -ballSpeedY;
       }
 
-      if (
-        ballX - ballSize < paddleWidth * 2 &&
-        ballY > paddle1Y &&
-        ballY < paddle1Y + paddleHeight
-      ) {
+      if (ballX - ballSize < paddleWidth * 2 && ballY > paddle1Y && ballY < paddle1Y + paddleHeight) {
         ballSpeedX = -ballSpeedX;
       }
 
-      if (
-        ballX + ballSize > canvas.width - paddleWidth * 2 &&
-        ballY > paddle2Y &&
-        ballY < paddle2Y + paddleHeight
-      ) {
+      if (ballX + ballSize > canvas.width - paddleWidth * 2 && ballY > paddle2Y && ballY < paddle2Y + paddleHeight) {
         ballSpeedX = -ballSpeedX;
       }
 
@@ -132,11 +115,7 @@
       gameActive = false;
       context.clearRect(0, 0, canvas.width, canvas.height);
       context.font = '24px Arial';
-      context.fillText(
-        scorePlayer1 === maxScore ? 'Joueur 1 gagne!' : 'Joueur 2 gagne!',
-        canvas.width / 2 - 100,
-        canvas.height / 2
-      );
+      context.fillText(scorePlayer1 === maxScore ? 'Joueur 1 gagne!' : 'Joueur 2 gagne!', canvas.width / 2 - 100, canvas.height / 2);
       document.getElementById('restartDiv').style.display = 'block';
     }
 
@@ -150,17 +129,23 @@
 
     canvas.addEventListener('mousemove', movePaddle);
 
-    socket.addEventListener('message', (event) => {
-      const receivedData = JSON.parse(event.data);
-      if (receivedData.type === 'paddle') {
-        paddle2Y = receivedData.y;
-      }
+    socket.on('connect', () => {
+      console.log('Connecté au serveur Socket.IO.');
+    });
+
+    socket.on('paddle', (data) => {
+      paddle2Y = data.y;
+    });
+
+    socket.on('playerDisconnected', () => {
+      console.log('Un joueur s\'est déconnecté.');
+      // Ajouter la logique pour gérer la déconnexion d'un joueur ici...
     });
 
     document.getElementById('joinGameBtn').addEventListener('click', () => {
       document.getElementById('gameControls').style.display = 'none';
       canvas.style.display = 'block';
-      socket.send(JSON.stringify({ type: 'newPlayer' }));
+      socket.emit('newPlayer');
       gameActive = true;
       updateGame();
     });
@@ -168,7 +153,6 @@
     document.getElementById('restartBtn').addEventListener('click', () => {
       resetGame();
     });
-
   </script>
 </body>
 </html>
